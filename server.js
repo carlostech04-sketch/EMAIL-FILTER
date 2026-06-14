@@ -4,14 +4,17 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 
 const app = express();
+
+// Handle CORS manually
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
   res.header("Access-Control-Allow-Credentials", "true");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
+
 app.use(express.json());
 
 mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/emailmgr")
