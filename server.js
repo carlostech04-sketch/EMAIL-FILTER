@@ -44,6 +44,9 @@ app.post("/send", async (req, res) => {
       host, port: parseInt(port) || 587,
       secure: parseInt(port) === 465,
       auth: { user, pass },
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
     });
 
     const fromAddr = fromName ? `${fromName} <${from}>` : from;
@@ -62,25 +65,15 @@ app.post("/send", async (req, res) => {
       text: body.includes("<") ? textBody : body,
     });
 
-    await Send.create({
-      email: to,
-      trackingId: trackingId || undefined,
-      subject,
-      status: "sent",
-      batchDate: new Date().toISOString().slice(0, 10),
-    });
+    if (trackingId) {
+      await Send.create({ email: to, trackingId, subject, status: "sent", batchDate: new Date().toISOString().slice(0,10) }).catch(() => {});
+    }
 
     res.json({ success: true, messageId: info.messageId });
   } catch (e) {
+    console.error("Send error:", e.message);
     if (req.body.trackingId) {
-      await Send.create({
-        email: req.body.to,
-        trackingId: req.body.trackingId,
-        subject: req.body.subject,
-        status: "failed",
-        error: e.message,
-        batchDate: new Date().toISOString().slice(0, 10),
-      }).catch(() => {});
+      await Send.create({ email: req.body.to, trackingId: req.body.trackingId, subject: req.body.subject, status: "failed", error: e.message, batchDate: new Date().toISOString().slice(0,10) }).catch(() => {});
     }
     res.status(500).json({ error: e.message });
   }
