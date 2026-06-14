@@ -561,6 +561,19 @@ function sendEmail() {
 
   prog.style.display = "";
   status.textContent = "";
+  document.getElementById("progStatus").textContent = "Waking up server...";
+  document.getElementById("progCount").textContent = "0 / " + total;
+
+  // Wake up Render server first
+  fetch("https://email-filter-sdq0.onrender.com/api/reports")
+    .then(() => startSending())
+    .catch(() => startSending());
+
+  function startSending() {
+    document.getElementById("progStatus").textContent = failed > 0 ? "Sending... (" + failed + " failed)" : "Sending...";
+    updateProg();
+    sendNext();
+  }
   function updateProg() {
     document.getElementById("progStatus").textContent = failed > 0 ? "Sending... (" + failed + " failed)" : "Sending...";
     document.getElementById("progCount").textContent = (sent + failed) + " / " + total;
