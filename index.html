@@ -587,6 +587,7 @@ function sendEmail() {
     const trackingId = Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8);
     fetch("https://email-filter-sdq0.onrender.com/send", {
       method: "POST",
+      mode: "cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ host, port, user, pass, from, to, subject, body, fromName, trackingId }),
     })
