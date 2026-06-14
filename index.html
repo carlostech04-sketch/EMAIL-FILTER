@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email Manager</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 20px; color: #333; }
+.container { max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 24px; margin-bottom: 20px; }
+
+.card { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 20px; }
+.card h2 { font-size: 16px; margin-bottom: 14px; color: #444; }
+
+.tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: 2px solid #eee; }
+.tab { padding: 10px 24px; cursor: pointer; font-size: 14px; font-weight: 600; color: #888; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: .15s; }
+.tab:hover { color: #555; }
+.tab.active { color: #4f8cff; border-bottom-color: #4f8cff; }
+.tab-content { display: none; padding-top: 20px; }
+.tab-content.active { display: block; }
+
+.upload-area { border: 2px dashed #ccc; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; transition: .2s; }
+.upload-area:hover, .upload-area.dragover { border-color: #4f8cff; background: #f0f5ff; }
+.upload-area input { display: none; }
+.upload-area .icon { font-size: 36px; margin-bottom: 6px; }
+
+textarea { width: 100%; min-height: 120px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; resize: vertical; outline: none; font-family: inherit; }
+textarea:focus { border-color: #4f8cff; box-shadow: 0 0 0 3px rgba(79,140,255,.15); }
+
+.btn { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; color: #fff; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { opacity: .9; }
+.btn-purple { background: #8b5cf6; }
+.btn-green { background: #22c55e; }
+.btn-blue { background: #4f8cff; }
+.btn-orange { background: #f59e0b; }
+.btn-red { background: #ef4444; }
+.btn-sm { padding: 7px 16px; font-size: 12px; }
+
+.input { padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; width: 100%; }
+.input:focus { border-color: #4f8cff; box-shadow: 0 0 0 3px rgba(79,140,255,.15); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.flex { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+.stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.stat { background: #fff; border-radius: 8px; padding: 12px 18px; flex: 1; min-width: 100px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.stat .lbl { font-size: 11px; color: #888; text-transform: uppercase; }
+.stat .val { font-size: 22px; font-weight: 700; margin-top: 2px; }
+
+.filter-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.filter-btn { padding: 6px 16px; border-radius: 20px; border: 2px solid #ddd; background: #fff; cursor: pointer; font-size: 12px; font-weight: 600; transition: .15s; }
+.filter-btn:hover { border-color: #999; }
+.filter-btn.active { color: #fff; border-color: #333; background: #333; }
+.filter-btn.active-delivered { border-color: #22c55e; background: #22c55e; }
+.filter-btn.active-read { border-color: #3b82f6; background: #3b82f6; }
+.filter-btn.active-failed { border-color: #ef4444; background: #ef4444; }
+.filter-btn.active-sent { border-color: #f59e0b; background: #f59e0b; }
+.filter-btn.active-replied { border-color: #8b5cf6; background: #8b5cf6; }
+
+.table-wrap { overflow-x: auto; border: 1px solid #eee; border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: #f8f9fa; padding: 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #e9ecef; cursor: pointer; user-select: none; font-size: 12px; }
+th:hover { background: #eef; }
+td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+tr:hover td { background: #f8faff; }
+.status-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+.status-delivered { background: #dcfce7; color: #166534; }
+.status-read { background: #dbeafe; color: #1e40af; }
+.status-failed { background: #fee2e2; color: #991b1b; }
+.status-sent { background: #fef3c7; color: #92400e; }
+.status-replied { background: #f3e8ff; color: #6b21a8; }
+
+.compose-body-wrap { position: relative; }
+.compose-body-wrap textarea { min-height: 160px; }
+.mode-badge { position: absolute; top: 8px; right: 8px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: #eee; color: #666; }
+.mode-badge.html { background: #fef3c7; color: #92400e; }
+.mode-badge.text { background: #dbeafe; color: #1e40af; }
+
+#htmlPreviewWrap { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin-top: 8px; }
+#htmlPreviewWrap .bar { background: #f8f9fa; padding: 6px 12px; font-size: 11px; color: #888; border-bottom: 1px solid #ddd; }
+#htmlPreviewWrap iframe { width: 100%; min-height: 200px; border: none; background: #fff; }
+
+.fade-in { animation: fadeIn .3s; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.status-msg { font-size: 13px; color: #888; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Email Manager</h1>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('input')">Input</div>
+  <div class="tab" onclick="switchTab('compose')">Compose</div>
+  <div class="tab" onclick="switchTab('reports')">Reports</div>
+</div>
+
+<!-- Tab: Input -->
+<div id="tab-input" class="tab-content active">
+  <div class="card">
+    <h2>Upload CSV</h2>
+    <div class="upload-area" id="dropArea">
+      <div class="icon">&#128196;</div>
+      <p style="color:#888">Click or drag &amp; drop a CSV file</p>
+      <input type="file" id="fileInput" accept=".csv">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Paste Text</h2>
+    <textarea id="pasteInput" placeholder="Paste emails, phone numbers, or HTML content here..."></textarea>
+    <div class="flex" style="margin-top:10px">
+      <button class="btn btn-purple" onclick="processPaste()">Auto-Detect &amp; Extract</button>
+      <span id="detectInfo" style="font-size:13px;color:#888"></span>
+    </div>
+  </div>
+
+  <div id="dataSection" style="display:none">
+    <div class="card">
+      <div class="flex" style="justify-content:space-between;margin-bottom:10px">
+        <h2 style="margin:0">Extracted Data</h2>
+        <div class="flex">
+          <button class="btn btn-orange btn-sm" onclick="copyNums()" id="copyBtn">Copy</button>
+          <button class="btn btn-green btn-sm" onclick="exportTXT()">Export TXT</button>
+          <button class="btn btn-blue btn-sm" onclick="exportCSV()">Export CSV</button>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="filter-btns" id="filterBtns"></div>
+      <input type="text" class="input" id="searchInput" placeholder="Search..." oninput="renderTable()" style="margin-bottom:12px">
+      <div class="table-wrap">
+        <table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:#888;text-align:center" id="footerInfo"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab: Compose -->
+<div id="tab-compose" class="tab-content">
+  <div class="card">
+    <h2>Send Email</h2>
+    <div id="dailyLimit" style="margin-bottom:12px;padding:10px 14px;background:#fef3c7;border-radius:8px;font-size:13px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span>Daily Limit</span>
+        <span id="limitText">0 / 500</span>
+      </div>
+      <div style="background:#fde68a;border-radius:10px;height:6px;overflow:hidden">
+        <div id="limitBar" style="background:#22c55e;height:100%;width:0%;border-radius:10px;transition:width .5s"></div>
+      </div>
+    </div>
+    <div id="composeInfo" style="font-size:13px;margin-bottom:12px;padding:10px 14px;background:#f0f5ff;border-radius:8px;display:none">
+      <span id="composeCount"></span>
+      <button class="btn btn-sm btn-blue" onclick="autoFillTo()" style="margin-left:10px">Auto-fill To</button>
+      <button class="btn btn-sm btn-orange" onclick="fillToWithFiltered()">Use Filtered</button>
+    </div>
+    <div class="grid-2" style="margin-bottom:12px">
+      <input class="input" id="smtpFromName" placeholder="Sender Name (e.g. Carlos)" value="">
+      <input class="input" id="composeSubject" placeholder="Subject">
+    </div>
+    <div class="grid-2" style="margin-bottom:12px;font-size:13px;color:#888">
+      <span>From: <span style="color:#333">carlos.tech04@gmail.com</span></span>
+      <span>SMTP: <span style="color:#333">smtp.gmail.com:587</span></span>
+    </div>
+    <div class="compose-body-wrap">
+      <textarea id="composeBody" placeholder="Type or paste your email content here..." oninput="onBodyChange()"></textarea>
+      <span class="mode-badge text" id="modeBadge">TEXT</span>
+    </div>
+    <div class="flex" style="margin-top:8px">
+      <button class="btn btn-sm btn-blue" type="button" onclick="togglePreview()">Preview</button>
+      <span style="font-size:12px;color:#888" id="previewLabel">Click to see preview</span>
+    </div>
+    <div id="htmlPreviewWrap" style="display:none;margin-top:8px;">
+      <div class="bar">Live Preview</div>
+      <iframe id="htmlPreview" style="width:100%;min-height:200px;border:none;background:#fff"></iframe>
+    </div>
+    <div class="flex" style="margin-top:12px">
+      <button class="btn btn-purple" onclick="fillToWithFiltered()">Use Filtered Emails</button>
+      <input class="input" id="composeTo" placeholder="To (comma separated)" style="flex:1;min-width:200px">
+    </div>
+    <div class="flex" style="margin-top:12px">
+      <button class="btn btn-green" onclick="sendEmail()">Send Email</button>
+      <button class="btn btn-blue" onclick="showSmtpSettings()">SMTP Settings</button>
+    </div>
+    <div id="sendProgress" style="display:none;margin-top:12px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span id="progStatus">Sending...</span>
+        <span id="progCount">0 / 0</span>
+      </div>
+      <div style="background:#eee;border-radius:10px;height:8px;overflow:hidden">
+        <div id="progBar" style="background:#22c55e;height:100%;width:0%;border-radius:10px;transition:width .3s"></div>
+      </div>
+      <div style="font-size:12px;margin-top:6px;display:flex;gap:16px;color:#888">
+        <span style="color:#22c55e" id="progSent">Sent: 0</span>
+        <span style="color:#ef4444" id="progFailed">Failed: 0</span>
+        <span id="progRemain">Remaining: 0</span>
+      </div>
+    </div>
+    <span class="status-msg" id="sendStatus" style="margin-top:8px;display:block"></span>
+  </div>
+</div>
+
+<!-- Tab: Reports -->
+<div id="tab-reports" class="tab-content">
+  <div class="card">
+    <h2>Send History &amp; Reports</h2>
+    <div class="stats" id="reportStats"></div>
+    <div style="margin-bottom:12px">
+      <button class="btn btn-sm btn-red" onclick="clearReports()">Clear History</button>
+      <button class="btn btn-sm btn-blue" onclick="fetchReports()">Refresh</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>To</th><th>Subject</th><th>Status</th><th>Opened</th><th>Error</th></tr></thead>
+        <tbody id="reportBody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;font-size:12px;color:#888;text-align:center" id="reportFooter"></div>
+  </div>
+</div>
+
+<!-- SMTP Settings Modal -->
+<div id="smtpModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;display:none;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:90%;max-width:450px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <h2 style="font-size:18px;margin-bottom:16px">SMTP Settings</h2>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <input class="input" id="smtpHost" placeholder="Host" value="smtp.gmail.com">
+      <div class="grid-2">
+        <input class="input" id="smtpPort" placeholder="Port" value="587">
+        <input class="input" id="smtpSecure" placeholder="Secure (SSL/TLS)" value="TLS">
+      </div>
+      <input class="input" id="smtpUser" placeholder="Username" value="carlos.tech04@gmail.com">
+      <input class="input" id="smtpPass" type="password" placeholder="Password / App Password" value="ypgn gmgs qhjf vtpt">
+      <input class="input" id="smtpFrom" placeholder="From Email" value="carlos.tech04@gmail.com">
+    </div>
+    <div class="flex" style="margin-top:16px">
+      <button class="btn btn-green" onclick="closeSmtp()">Done</button>
+      <span style="font-size:12px;color:#888">Settings saved automatically</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+let rawData = [];
+let sortCol = null;
+let sortDir = 1;
+let activeFilters = new Set();
+
+function switchTab(name) {
+  document.querySelectorAll(".tab, .tab-content").forEach(el => el.classList.remove("active"));
+  document.querySelector(`.tab[onclick*='${name}']`).classList.add("active");
+  document.getElementById("tab-" + name).classList.add("active");
+  if (name === "compose") {
+    updateLimitDisplay();
+    if (rawData.some(r => (r.NAME || "").includes("@"))) autoFillTo();
+  }
+  if (name === "reports") renderReports();
+}
+
+// ====== AUTO-DETECT ======
+function autoDetect(text) {
+  const hasHTML = /<html|<body|<div|<p|<br|<table|<a\s|<img|<style|<script|<h[1-6]|<!DOCTYPE/i.test(text);
+  const hasEmail = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(text);
+  const hasPhone = /\+?\d[\d\s.\-()]{6,}\d/.test(text);
+  const hasCSV = /".*".*".*"/.test(text) && text.includes(",");
+  return { hasHTML, hasEmail, hasPhone, hasCSV };
+}
+
+function processPaste() {
+  const text = document.getElementById("pasteInput").value;
+  if (!text.trim()) return alert("Paste something first");
+  const info = autoDetect(text);
+  const det = document.getElementById("detectInfo");
+
+  // If it looks like CSV
+  if (info.hasCSV && text.includes("\n")) {
+    try {
+      const parsed = parseCSV(text);
+      if (parsed.length) { rawData = parsed; loadData(); det.textContent = "Detected: CSV"; return; }
+    } catch(e) {}
+  }
+
+  // If it's HTML content (user wants to send as email body)
+  if (info.hasHTML) {
+    document.getElementById("composeBody").value = text;
+    onBodyChange();
+    switchTab("compose");
+    det.textContent = "Detected: HTML content (moved to compose)";
+    return;
+  }
+
+  // Extract emails
+  const emails = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
+  const uniqueEmails = [...new Set(emails)];
+  const nums = [...new Set(text.match(/\+?\d[\d\s.\-()]{6,}\d/g) || [])].map(v => v.replace(/[^\d]/g, "")).filter(v => v.length > 5).map(v => "+" + v);
+  const uniqueNums = [...new Set(nums)];
+
+  if (uniqueEmails.length && uniqueNums.length) {
+    det.textContent = `Detected: ${uniqueEmails.length} emails + ${uniqueNums.length} phone numbers (showing emails)`;
+    loadEmailData(uniqueEmails);
+  } else if (uniqueEmails.length) {
+    det.textContent = `Detected: ${uniqueEmails.length} emails`;
+    loadEmailData(uniqueEmails);
+  } else if (uniqueNums.length) {
+    det.textContent = `Detected: ${uniqueNums.length} phone numbers`;
+    loadNumData(uniqueNums);
+  } else {
+    // Treat as plain text body for compose
+    document.getElementById("composeBody").value = text;
+    onBodyChange();
+    switchTab("compose");
+    det.textContent = "No emails/numbers found. Moved to compose body.";
+  }
+}
+
+function loadEmailData(emails) {
+  rawData = emails.map((v, i) => ({
+    ID: "e" + i, "MESSAGE INDEX": "", "MESSAGE TYPE": "",
+    UID: "", NAME: v, RECEIVER: v,
+    STATUS: "email", SENT: "", DELIVERED: "", READ: "", REPLIED: "",
+    "REPLY TYPE": "", REPLY: "", FAILED: "", ERROR: ""
+  }));
+  loadData();
+}
+
+function loadNumData(nums) {
+  rawData = nums.map((v, i) => ({
+    ID: "n" + i, "MESSAGE INDEX": "", "MESSAGE TYPE": "",
+    UID: "", NAME: v.replace("+",""), RECEIVER: v.replace("+",""),
+    STATUS: "number", SENT: "", DELIVERED: "", READ: "", REPLIED: "",
+    "REPLY TYPE": "", REPLY: "", FAILED: "", ERROR: ""
+  }));
+  loadData();
+}
+
+function autoFillTo() {
+  const items = [...new Set(rawData.map(r => r.NAME).filter(v => v && v.includes("@")))];  
+  if (items.length) {
+    document.getElementById("composeTo").value = items.join(", ");
+    document.getElementById("composeCount").textContent = items.length + " emails loaded from data";
+    document.getElementById("composeInfo").style.display = "";
+  }
+}
+
+function loadData() {
+  document.getElementById("dataSection").style.display = "";
+  const isEmail = rawData.some(r => (r.NAME || "").includes("@"));
+  document.getElementById("copyBtn").textContent = isEmail ? "Copy Emails" : "Copy Numbers";
+  if (isEmail) autoFillTo();
+  // Build status filter buttons
+  const statuses = [...new Set(rawData.map(r => r.STATUS))];
+  const html = '<button class="filter-btn active" data-filter="all">All</button>' +
+    statuses.map(s => `<button class="filter-btn" data-filter="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join("");
+  document.getElementById("filterBtns").innerHTML = html;
+  document.getElementById("filterBtns").querySelectorAll(".filter-btn").forEach(b => {
+    b.onclick = () => {
+      const f = b.dataset.filter;
+      document.querySelectorAll("#filterBtns .filter-btn").forEach(btn => btn.classList.remove("active"));
+      if (f === "all") { activeFilters.clear(); }
+      else { activeFilters = new Set([f]); document.querySelector("#filterBtns .filter-btn:first-child").classList.remove("active"); }
+      b.classList.add("active");
+      renderTable();
+    };
+  });
+  renderStats(rawData);
+  sortCol = null; sortDir = 1;
+  renderTable();
+}
+
+function renderStats(data) {
+  const total = data.length;
+  const counts = {};
+  data.forEach(r => { const s = r.STATUS || "unknown"; counts[s] = (counts[s] || 0) + 1; });
+  let html = `<div class="stat"><div class="lbl">Total</div><div class="val">${total}</div></div>`;
+  for (const [k,v] of Object.entries(counts)) html += `<div class="stat"><div class="lbl">${k}</div><div class="val">${v}</div></div>`;
+  document.getElementById("stats").innerHTML = html;
+}
+
+function getFiltered() {
+  const query = document.getElementById("searchInput").value.toLowerCase();
+  return rawData.filter(r => {
+    if (activeFilters.size && !activeFilters.has(r.STATUS)) return false;
+    if (query) {
+      const s = [r.NAME, r.RECEIVER, r.UID, r.ERROR, r.STATUS].join(" ").toLowerCase();
+      if (!s.includes(query)) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable() {
+  let filtered = getFiltered();
+  if (sortCol) {
+    filtered.sort((a, b) => {
+      const va = a[sortCol] || "", vb = b[sortCol] || "";
+      const na = parseFloat(va), nb = parseFloat(vb);
+      if (!isNaN(na) && !isNaN(nb)) return (na - nb) * sortDir;
+      return va.localeCompare(vb) * sortDir;
+    });
+  }
+  const isEmail = rawData.some(r => (r.NAME || "").includes("@"));
+  const cols = isEmail ? ["STATUS","NAME","RECEIVER"] : ["STATUS","NAME","RECEIVER","SENT","DELIVERED","READ","FAILED","ERROR"];
+  const labels = isEmail ? ["Type","Email","Email"] : ["Status","Name","Receiver","Sent","Delivered","Read","Failed","Error"];
+
+  document.getElementById("tableHead").innerHTML = `<tr>${labels.map((l, i) =>
+    `<th onclick="sortBy('${cols[i]}')">${l}</th>`
+  ).join("")}</tr>`;
+
+  document.getElementById("tableBody").innerHTML = filtered.map(r => {
+    const sc = "status-" + r.STATUS;
+    if (isEmail) return `<tr><td><span class="status-badge ${sc}">${r.STATUS}</span></td><td>${r.NAME}</td><td>${r.RECEIVER}</td></tr>`;
+    return `<tr><td><span class="status-badge ${sc}">${r.STATUS}</span></td><td>${r.NAME}</td><td>${r.RECEIVER}</td>
+      <td>${r.SENT||"-"}</td><td>${r.DELIVERED||"-"}</td><td>${r.READ||"-"}</td><td>${r.FAILED||"-"}</td><td>${r.ERROR||"-"}</td></tr>`;
+  }).join("") || "<tr><td colspan='8' style='text-align:center;padding:20px;color:#888'>No data</td></tr>";
+
+  document.getElementById("footerInfo").textContent = `Showing ${filtered.length} of ${rawData.length}`;
+}
+
+function sortBy(col) {
+  if (sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = 1; }
+  renderTable();
+}
+
+// ====== DAILY LIMIT & REPORTS ======
+function getToday() { return new Date().toISOString().slice(0,10); }
+function getLimit() { return parseInt(localStorage.getItem("email_daily_limit") || "500"); }
+function getTodaySent() { return parseInt(localStorage.getItem("email_sent_" + getToday()) || "0"); }
+function addTodaySent(n) {
+  const key = "email_sent_" + getToday();
+  localStorage.setItem(key, getTodaySent() + n);
+  updateLimitDisplay();
+}
+function updateLimitDisplay() {
+  const sent = getTodaySent(), limit = getLimit();
+  document.getElementById("limitText").textContent = sent + " / " + limit;
+  const pct = Math.min(100, sent / limit * 100);
+  document.getElementById("limitBar").style.width = pct + "%";
+  document.getElementById("limitBar").style.background = pct >= 100 ? "#ef4444" : pct >= 80 ? "#f59e0b" : "#22c55e";
+  document.getElementById("dailyLimit").style.background = pct >= 100 ? "#fee2e2" : pct >= 80 ? "#fef3c7" : "#fef3c7";
+}
+function logSend(to, status, count) {
+  let log = JSON.parse(localStorage.getItem("email_send_log") || "[]");
+  log.unshift({ date: getToday(), time: new Date().toLocaleTimeString(), to: to.slice(0,40), status, count });
+  if (log.length > 200) log = log.slice(0, 200);
+  localStorage.setItem("email_send_log", JSON.stringify(log));
+}
+function renderReports() {
+  const log = JSON.parse(localStorage.getItem("email_send_log") || "[]");
+  const body = document.getElementById("reportBody");
+  if (!log.length) { body.innerHTML = "<tr><td colspan='6' style='text-align:center;padding:20px;color:#888'>No history yet</td></tr>"; return; }
+  body.innerHTML = log.map(r => `<tr><td>${r.time}</td><td title="${r.to}">${r.to.slice(0,30)}${r.to.length>30?"...":""}</td>
+    <td>-</td>
+    <td style="color:${r.status==='sent'?'#22c55e':r.status==='failed'?'#ef4444':'#f59e0b'}">${r.status}</td>
+    <td>-</td><td>-</td></tr>`).join("");
+  document.getElementById("reportFooter").textContent = log.length + " entries (local)";
+  const today = getToday();
+  const todayLog = log.filter(r => r.date === today);
+  document.getElementById("reportStats").innerHTML =
+    `<div class="stat"><div class="lbl">Today Sent</div><div class="val" style="color:#22c55e">${todayLog.filter(r=>r.status==='sent').length}</div></div>` +
+    `<div class="stat"><div class="lbl">Today Failed</div><div class="val" style="color:#ef4444">${todayLog.filter(r=>r.status==='failed').length}</div></div>` +
+    `<div class="stat"><div class="lbl">Total Sent</div><div class="val">${log.filter(r=>r.status==='sent').length}</div></div>` +
+    `<div class="stat"><div class="lbl">All Time</div><div class="val">${log.length}</div></div>`;
+  fetchReports();
+}
+function clearReports() {
+  if (confirm("Clear all send history?")) { localStorage.removeItem("email_send_log"); renderReports(); }
+}
+async function fetchReports() {
+  try {
+    const r = await fetch("https://email-filter-sdq0.onrender.com/api/reports");
+    const data = await r.json();
+    if (!data.stats) return;
+    const html = document.getElementById("reportStats").innerHTML;
+    document.getElementById("reportStats").innerHTML = html +
+      `<div class="stat"><div class="lbl">Server Sent</div><div class="val" style="color:#22c55e">${data.stats.totalSent}</div></div>` +
+      `<div class="stat"><div class="lbl">Opened</div><div class="val" style="color:#22c55e">${data.stats.totalOpened}</div></div>` +
+      `<div class="stat"><div class="lbl">Failed</div><div class="val" style="color:#ef4444">${data.stats.totalFailed}</div></div>`;
+  } catch (e) { /* server off */ }
+}
+
+// ====== COMPOSE ======
+function onBodyChange() {
+  const val = document.getElementById("composeBody").value;
+  const badge = document.getElementById("modeBadge");
+  const isHTML = /<html|<body|<div|<p|<br|<table|<a\s|<img|<h[1-6]|<style|<script|<meta/i.test(val);
+  badge.textContent = isHTML ? "HTML" : "TEXT";
+  badge.className = "mode-badge " + (isHTML ? "html" : "text");
+  const wrap = document.getElementById("htmlPreviewWrap");
+  const iframe = document.getElementById("htmlPreview");
+  if (isHTML) {
+    wrap.style.display = "";
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(val || "<html><body style='font-family:Arial;padding:20px'></body></html>");
+    iframe.contentDocument.close();
+  } else {
+    wrap.style.display = "none";
+  }
+}
+
+function fillToWithFiltered() {
+  const filtered = getFiltered();
+  const items = [...new Set(filtered.map(r => r.NAME).filter(Boolean))];
+  document.getElementById("composeTo").value = items.join(", ");
+  const emails = items.filter(v => v.includes("@"));
+  if (emails.length) {
+    document.getElementById("composeCount").textContent = emails.length + " emails (filtered)";
+    document.getElementById("composeInfo").style.display = "";
+  }
+}
+
+function showSmtpSettings() {
+  document.getElementById("smtpModal").style.display = "flex";
+}
+function closeSmtp() {
+  document.getElementById("smtpModal").style.display = "none";
+}
+
+function togglePreview() {
+  const wrap = document.getElementById("htmlPreviewWrap");
+  const val = document.getElementById("composeBody").value;
+  if (wrap.style.display !== "none" && wrap.style.display !== "") {
+    wrap.style.display = "none";
+    document.getElementById("previewLabel").textContent = "Click to see preview";
+    return;
+  }
+  wrap.style.display = "block";
+  document.getElementById("previewLabel").textContent = "Preview";
+  document.getElementById("htmlPreview").srcdoc = val || "<html><body style='font-family:Arial;padding:20px;color:#333'>Empty body</body></html>";
+}
+
+function sendEmail() {
+  const host = document.getElementById("smtpHost").value.trim();
+  const port = document.getElementById("smtpPort").value.trim();
+  const user = document.getElementById("smtpUser").value.trim();
+  const pass = document.getElementById("smtpPass").value.trim();
+  const from = document.getElementById("smtpFrom").value.trim();
+  const fromName = document.getElementById("smtpFromName").value.trim();
+  const toAll = document.getElementById("composeTo").value.split(",").map(s => s.trim()).filter(Boolean);
+  const subject = document.getElementById("composeSubject").value.trim();
+  const body = document.getElementById("composeBody").value.trim();
+  if (!host || !user || !pass || !from || !toAll.length || !subject || !body)
+    return alert("Fill all fields");
+  
+  const limit = getLimit(), todaySent = getTodaySent();
+  const available = limit - todaySent;
+  if (available <= 0) return alert("Daily limit of " + limit + " reached! Wait for reset.");
+  if (toAll.length > available && !confirm("Only " + available + " sends left today. Send " + available + " instead?"))
+    return;
+  const batch = Math.min(toAll.length, available);
+  const sendList = toAll.slice(0, batch);
+
+  const prog = document.getElementById("sendProgress");
+  const status = document.getElementById("sendStatus");
+  const total = sendList.length;
+  let sent = 0, failed = 0;
+
+  prog.style.display = "";
+  status.textContent = "";
+  function updateProg() {
+    document.getElementById("progStatus").textContent = failed > 0 ? "Sending... (" + failed + " failed)" : "Sending...";
+    document.getElementById("progCount").textContent = (sent + failed) + " / " + total;
+    document.getElementById("progSent").textContent = "Sent: " + sent;
+    document.getElementById("progFailed").textContent = "Failed: " + failed;
+    document.getElementById("progRemain").textContent = "Remaining: " + (total - sent - failed);
+    document.getElementById("progBar").style.width = ((sent + failed) / total * 100) + "%";
+  }
+  updateProg();
+
+  let idx = 0;
+  function sendNext() {
+    if (idx >= total) {
+      document.getElementById("progStatus").textContent = failed ? "Done with " + failed + " failure(s)" : "All sent!";
+      document.getElementById("progBar").style.background = failed ? (sent ? "#f59e0b" : "#ef4444") : "#22c55e";
+      status.textContent = "Sent " + sent + "/" + total + (failed ? ", " + failed + " failed" : "");
+      status.style.color = failed ? "#ef4444" : "#22c55e";
+      addTodaySent(sent);
+      if (sent) logSend(sendList.join(", ").slice(0,80), "sent", sent);
+      if (failed) logSend("(partial failures)", "failed", failed);
+      return;
+    }
+    const to = sendList[idx];
+    const trackingId = Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8);
+    fetch("https://email-filter-sdq0.onrender.com/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ host, port, user, pass, from, to, subject, body, fromName, trackingId }),
+    })
+      .then(r => r.json())
+      .then(d => { d.success ? sent++ : failed++; updateProg(); idx++; sendNext(); })
+      .catch(() => { failed++; updateProg(); idx++; sendNext(); });
+  }
+  sendNext();
+}
+
+// ====== COPY & EXPORT ======
+function copyNums() {
+  const filtered = getFiltered();
+  if (!filtered.length) return alert("No data");
+  const isEmail = filtered.some(r => r.NAME.includes("@"));
+  const items = [...new Set(filtered.map(r => r.NAME).filter(Boolean))];
+  const text = items.join("\r\n");
+  navigator.clipboard.writeText(text).then(() => alert("Copied " + items.length + " " + (isEmail ? "emails" : "numbers")));
+}
+
+function cleanNum(v) { return v ? v.replace(/[^\d]/g, "") : ""; }
+function exportTXT() {
+  const filtered = getFiltered();
+  if (!filtered.length) return alert("No data");
+  const isEmail = filtered.some(r => r.NAME.includes("@"));
+  const items = [...new Set(filtered.map(r => r.NAME).filter(Boolean))];
+  const blob = new Blob([items.join("\r\n")], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (isEmail ? "emails_" : "numbers_") + Date.now() + ".txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportCSV() {
+  const filtered = getFiltered();
+  const isEmail = filtered.some(r => r.NAME.includes("@"));
+  const cols = isEmail ? ["EMAIL"] : ["NAME","RECEIVER","STATUS"];
+  if (!filtered.length) return alert("No data");
+  let csv = cols.map(c => `"${c}"`).join(",") + "\r\n";
+  filtered.forEach(r => {
+    if (isEmail) csv += `"${r.NAME}"\r\n`;
+    else csv += cols.map(c => `"${(r[c]||"").replace(/"/g,'""')}"`).join(",") + "\r\n";
+  });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;bom" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (isEmail ? "emails_" : "data_") + Date.now() + ".csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ====== CSV PARSER ======
+function parseCSV(text) {
+  const rows = []; let row = []; let field = ""; let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i], nxt = text[i + 1];
+    if (inQ) {
+      if (ch === '"' && nxt === '"') { field += '"'; i++; }
+      else if (ch === '"') inQ = false;
+      else field += ch;
+    } else {
+      if (ch === '"') inQ = true;
+      else if (ch === ",") { row.push(field); field = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && nxt === "\n") i++;
+        row.push(field); field = "";
+        if (row.length > 1 || (row.length === 1 && row[0])) rows.push(row);
+        row = [];
+      } else field += ch;
+    }
+  }
+  if (row.length || field) { row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const cols = rows[0];
+  const result = [];
+  for (let r = 1; r < rows.length; r++) {
+    const o = {};
+    cols.forEach((c, i) => o[c] = rows[r][i] || "");
+    if (Object.values(o).some(v => v)) result.push(o);
+  }
+  return result;
+}
+
+// ====== FILE HANDLING ======
+const dropArea = document.getElementById("dropArea");
+const fileInput = document.getElementById("fileInput");
+dropArea.addEventListener("click", () => fileInput.click());
+dropArea.addEventListener("dragover", e => { e.preventDefault(); dropArea.classList.add("dragover"); });
+dropArea.addEventListener("dragleave", () => dropArea.classList.remove("dragover"));
+dropArea.addEventListener("drop", e => { e.preventDefault(); dropArea.classList.remove("dragover"); loadFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener("change", e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+function loadFile(file) {
+  if (!file.name.endsWith(".csv")) return alert("Upload a .csv file");
+  const reader = new FileReader();
+  reader.onload = e => {
+    rawData = parseCSV(e.target.result);
+    if (!rawData.length) return alert("No data found");
+    loadData();
+    const hasEmail = rawData.some(r => (r.NAME || "").includes("@"));
+    if (hasEmail) { document.getElementById("composeSubject").focus(); }
+  };
+  reader.readAsText(file);
+}
+updateLimitDisplay();
+</script>
+</body>
+</html>
