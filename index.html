@@ -256,7 +256,29 @@ function switchTab(name) {
   document.querySelector(`.tab[onclick*='${name}']`).classList.add("active");
   document.getElementById("tab-" + name).classList.add("active");
   if (name === "compose") {
-    updateLimitDisplay();
+updateLimitDisplay();
+
+// Keep Render server awake (ping every 9 min)
+function keepAlive() {
+  fetch("https://email-filter-sdq0.onrender.com/api/reports")
+    .then(r => r.json())
+    .then(d => {
+      const el = document.getElementById("serverStatus") || document.querySelector(".tabs");
+      if (!document.getElementById("serverStatus")) {
+        const s = document.createElement("span");
+        s.id = "serverStatus";
+        s.style.cssText = "margin-left:auto;font-size:11px;padding:4px 10px;border-radius:20px;background:#d1fae5;color:#065f46";
+        s.textContent = "Server Up";
+        el.parentNode.insertBefore(s, el.nextSibling);
+      }
+    })
+    .catch(() => {
+      const el = document.getElementById("serverStatus");
+      if (el) { el.style.background = "#fee2e2"; el.style.color = "#991b1b"; el.textContent = "Server Down"; }
+    });
+}
+keepAlive();
+setInterval(keepAlive, 540000); // 9 min
     if (rawData.some(r => (r.NAME || "").includes("@"))) autoFillTo();
   }
   if (name === "reports") renderReports();
