@@ -163,8 +163,8 @@ tr:hover td { background: #f8faff; }
       <input class="input" id="composeSubject" placeholder="Subject">
     </div>
     <div class="grid-2" style="margin-bottom:12px;font-size:13px;color:#888">
-      <span>From: <span style="color:#333">carlos.tech04@gmail.com</span></span>
-      <span>SMTP: <span style="color:#333">smtp.gmail.com:587</span></span>
+      <span>From: <span style="color:#333">configured on backend</span></span>
+      <span>SMTP: <span style="color:#333">smtp.gmail.com:465 SSL</span></span>
     </div>
     <div class="compose-body-wrap">
       <textarea id="composeBody" placeholder="Type or paste your email content here..." oninput="onBodyChange()"></textarea>
@@ -230,12 +230,12 @@ tr:hover td { background: #f8faff; }
     <div style="display:flex;flex-direction:column;gap:10px">
       <input class="input" id="smtpHost" placeholder="Host" value="smtp.gmail.com">
       <div class="grid-2">
-        <input class="input" id="smtpPort" placeholder="Port" value="587">
-        <input class="input" id="smtpSecure" placeholder="Secure (SSL/TLS)" value="TLS">
+        <input class="input" id="smtpPort" placeholder="Port" value="465">
+        <input class="input" id="smtpSecure" placeholder="Secure (SSL/TLS)" value="true">
       </div>
-      <input class="input" id="smtpUser" placeholder="Username" value="carlos.tech04@gmail.com">
-      <input class="input" id="smtpPass" type="password" placeholder="Password / App Password" value="ypgn gmgs qhjf vtpt">
-      <input class="input" id="smtpFrom" placeholder="From Email" value="carlos.tech04@gmail.com">
+      <input class="input" id="smtpUser" placeholder="Username">
+      <input class="input" id="smtpPass" type="password" placeholder="Password / App Password">
+      <input class="input" id="smtpFrom" placeholder="From Email">
     </div>
     <div class="flex" style="margin-top:16px">
       <button class="btn btn-green" onclick="closeSmtp()">Done</button>
@@ -558,6 +558,7 @@ function togglePreview() {
 function sendEmail() {
   const host = document.getElementById("smtpHost").value.trim();
   const port = document.getElementById("smtpPort").value.trim();
+  const secure = document.getElementById("smtpSecure").value.trim();
   const user = document.getElementById("smtpUser").value.trim();
   const pass = document.getElementById("smtpPass").value.trim();
   const from = document.getElementById("smtpFrom").value.trim();
@@ -565,8 +566,8 @@ function sendEmail() {
   const toAll = document.getElementById("composeTo").value.split(",").map(s => s.trim()).filter(Boolean);
   const subject = document.getElementById("composeSubject").value.trim();
   const body = document.getElementById("composeBody").value.trim();
-  if (!host || !user || !pass || !from || !toAll.length || !subject || !body)
-    return alert("Fill all fields");
+  if (!toAll.length || !subject || !body)
+    return alert("Fill To, Subject, and Body");
   
   const limit = getLimit(), todaySent = getTodaySent();
   const available = limit - todaySent;
@@ -624,11 +625,25 @@ function sendEmail() {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ host, port, user, pass, from, to, subject, body, fromName, trackingId }),
+      body: JSON.stringify({ host, port, secure, user, pass, from, to, subject, body, fromName, trackingId }),
     })
       .then(r => r.json())
-      .then(d => { d.success ? sent++ : failed++; updateProg(); idx++; sendNext(); })
-      .catch(() => { failed++; updateProg(); idx++; sendNext(); });
+      .then(d => {
+        if (d.success) {
+          sent++;
+        } else {
+          failed++;
+          status.textContent = d.error || "Send failed";
+          status.style.color = "#ef4444";
+        }
+        updateProg(); idx++; sendNext();
+      })
+      .catch(() => {
+        failed++;
+        status.textContent = "Backend unreachable or timed out";
+        status.style.color = "#ef4444";
+        updateProg(); idx++; sendNext();
+      });
   }
   sendNext();
 }

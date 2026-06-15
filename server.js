@@ -34,22 +34,48 @@ const sendSchema = new mongoose.Schema({
 });
 const Send = mongoose.model("Send", sendSchema);
 
+function parseBool(value) {
+  if (typeof value === "boolean") return value;
+  if (value == null) return undefined;
+  return ["1", "true", "yes", "ssl", "tls"].includes(String(value).toLowerCase());
+}
+
+function getSmtpConfig(body) {
+  const port = parseInt(process.env.SMTP_PORT || body.port || "465", 10);
+  const secure = parseBool(process.env.SMTP_SECURE ?? body.secure) ?? port === 465;
+  const user = process.env.SMTP_USER || body.user;
+  const pass = process.env.SMTP_PASS || body.pass;
+  const from = process.env.SMTP_FROM || body.from || user;
+
+  return {
+    host: process.env.SMTP_HOST || body.host || "smtp.gmail.com",
+    port,
+    secure,
+    user,
+    pass,
+    from,
+  };
+}
+
 app.post("/send", async (req, res) => {
   try {
-    const { host, port, user, pass, from, to, subject, body, fromName, trackingId } = req.body;
-    if (!host || !user || !pass || !from || !to || !subject || !body)
-      return res.status(400).json({ error: "All fields required" });
+    const { to, subject, body, fromName, trackingId } = req.body;
+    const smtp = getSmtpConfig(req.body);
+    if (!smtp.host || !smtp.user || !smtp.pass || !smtp.from || !to || !subject || !body) {
+      return res.status(400).json({ error: "SMTP config, recipient, subject, and body are required" });
+    }
 
     const transporter = nodemailer.createTransport({
-      host, port: parseInt(port) || 587,
-      secure: parseInt(port) === 465,
-      auth: { user, pass },
+      host: smtp.host,
+      port: smtp.port,
+      secure: smtp.secure,
+      auth: { user: smtp.user, pass: smtp.pass },
       connectionTimeout: 15000,
       greetingTimeout: 10000,
       socketTimeout: 20000,
     });
 
-    const fromAddr = fromName ? `${fromName} <${from}>` : from;
+    const fromAddr = fromName ? `${fromName} <${smtp.from}>` : smtp.from;
 
     let htmlBody = body;
     let textBody = body.replace(/<[^>]*>/g, "");
@@ -71,7 +97,7 @@ app.post("/send", async (req, res) => {
 
     res.json({ success: true, messageId: info.messageId });
   } catch (e) {
-    console.error("Send error:", e.message);
+    console.error("Send error:", e.code || e.command || "", e.message);
     if (req.body.trackingId) {
       await Send.create({ email: req.body.to, trackingId: req.body.trackingId, subject: req.body.subject, status: "failed", error: e.message, batchDate: new Date().toISOString().slice(0,10) }).catch(() => {});
     }
