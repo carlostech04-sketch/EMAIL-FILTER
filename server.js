@@ -1,6 +1,13 @@
 const dns = require("dns");
 dns.setDefaultResultOrder("ipv4first");
 
+function ipv4Lookup(hostname, opts, cb) {
+  dns.resolve4(hostname, (err, addresses) => {
+    if (err || !addresses || !addresses.length) return dns.lookup(hostname, { family: 4 }, cb);
+    cb(null, addresses[0], 4);
+  });
+}
+
 const express = require("express");
 const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
@@ -76,6 +83,7 @@ app.post("/send", async (req, res) => {
       connectionTimeout: 15000,
       greetingTimeout: 10000,
       socketTimeout: 20000,
+      lookup: ipv4Lookup,
     });
 
     const fromAddr = fromName ? `${fromName} <${smtp.from}>` : smtp.from;
