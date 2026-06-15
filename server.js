@@ -26,6 +26,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+app.use(express.static("."));
 
 mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/emailmgr")
   .then(() => console.log("MongoDB connected"))
@@ -98,8 +99,8 @@ app.post("/send", async (req, res) => {
 
     const info = await transporter.sendMail({
       from: fromAddr, to, subject,
-      html: body.includes("<") ? htmlBody : undefined,
-      text: body.includes("<") ? textBody : body,
+      html: htmlBody,
+      text: textBody,
     });
 
     if (trackingId) {
