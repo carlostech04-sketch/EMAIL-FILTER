@@ -198,17 +198,29 @@ app.get("/api/export", async (req, res) => {
   try {
     const filter = { opened: true };
     let label = "all_campaigns";
+    let campaignName = null;
     if (req.query.campaignId) {
       filter.campaignId = req.query.campaignId;
       const campaign = await Campaign.findById(req.query.campaignId).lean();
-      label = campaign ? campaign.name.replace(/[^a-zA-Z0-9]/g,"_") : "campaign";
+      campaignName = campaign ? campaign.name : null;
+      label = campaignName ? campaignName.replace(/[^a-zA-Z0-9]/g,"_") : "campaign";
     }
     const sends = await Send.find(filter).sort({ openedAt: -1 }).lean();
-    let csv = "Email,Subject,Campaign,Sent At,Opened At\n";
+    // Resolve campaign names for all sends
+    const campIds = [...new Set(sends.map(s => String(s.campaignId)).filter(Boolean))];
+    const camps = await Campaign.find({ _id: { $in: campIds } }).lean();
+    const campMap = {};
+    camps.forEach(c => campMap[c._id] = c.name);
+
+    const BOM = "\uFEFF";
+    let csv = BOM + "Email,Subject,Campaign,Sent At,Opened At\n";
     sends.forEach(s => {
-      csv += `"${s.email}","${s.subject || ""}","${s.campaignId || ""}","${s.sentAt?.toISOString() || ""}","${s.openedAt?.toISOString() || ""}"\n`;
+      const cName = s.campaignId ? (campMap[s.campaignId] || String(s.campaignId).slice(-6)) : "—";
+      const sent = s.sentAt ? new Date(s.sentAt).toLocaleString() : "";
+      const opened = s.openedAt ? new Date(s.openedAt).toLocaleString() : "";
+      csv += `"${s.email}","${(s.subject || "").replace(/"/g,'""')}","${cName}","${sent}","${opened}"\n`;
     });
-    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="opens_${label}.csv"`);
     res.send(csv);
   } catch (e) {
