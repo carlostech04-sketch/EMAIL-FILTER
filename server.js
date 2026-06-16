@@ -32,6 +32,17 @@ mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/emailmgr")
   .then(() => console.log("MongoDB connected"))
   .catch(e => console.error("MongoDB error:", e.message));
 
+const campaignSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  smtpHost: String,
+  smtpUser: String,
+  smtpFrom: String,
+  totalSent: { type: Number, default: 0 },
+  totalOpened: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
+});
+const Campaign = mongoose.model("Campaign", campaignSchema);
+
 const sendSchema = new mongoose.Schema({
   email: String,
   trackingId: { type: String, unique: true, sparse: true },
@@ -42,6 +53,7 @@ const sendSchema = new mongoose.Schema({
   status: String,
   error: String,
   batchDate: String,
+  campaignId: { type: mongoose.Schema.Types.ObjectId, ref: "Campaign" },
 });
 const Send = mongoose.model("Send", sendSchema);
 
@@ -70,7 +82,7 @@ function getSmtpConfig(body) {
 
 app.post("/send", async (req, res) => {
   try {
-    const { to, subject, body, fromName, trackingId } = req.body;
+    const { to, subject, body, fromName, trackingId, campaignId } = req.body;
     const smtp = getSmtpConfig(req.body);
     if (!smtp.host || !smtp.user || !smtp.pass || !smtp.from || !to || !subject || !body) {
       return res.status(400).json({ error: "SMTP config, recipient, subject, and body are required" });
@@ -104,14 +116,21 @@ app.post("/send", async (req, res) => {
     });
 
     if (trackingId) {
-      await Send.create({ email: to, trackingId, subject, status: "sent", batchDate: new Date().toISOString().slice(0,10) }).catch(() => {});
+      const doc = { email: to, trackingId, subject, status: "sent", batchDate: new Date().toISOString().slice(0,10) };
+      if (campaignId) doc.campaignId = campaignId;
+      await Send.create(doc).catch(() => {});
+      if (campaignId) {
+        await Campaign.findByIdAndUpdate(campaignId, { $inc: { totalSent: 1 } }).catch(() => {});
+      }
     }
 
     res.json({ success: true, messageId: info.messageId });
   } catch (e) {
     console.error("Send error:", e.code || e.command || "", e.message);
     if (req.body.trackingId) {
-      await Send.create({ email: req.body.to, trackingId: req.body.trackingId, subject: req.body.subject, status: "failed", error: e.message, batchDate: new Date().toISOString().slice(0,10) }).catch(() => {});
+      const doc = { email: req.body.to, trackingId: req.body.trackingId, subject: req.body.subject, status: "failed", error: e.message, batchDate: new Date().toISOString().slice(0,10) };
+      if (req.body.campaignId) doc.campaignId = req.body.campaignId;
+      await Send.create(doc).catch(() => {});
     }
     res.status(500).json({ error: e.message });
   }
@@ -123,27 +142,75 @@ app.get("/track/:id", async (req, res) => {
   res.send(Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"));
 
   try {
-    await Send.findOneAndUpdate(
+    const updated = await Send.findOneAndUpdate(
       { trackingId: req.params.id, opened: false },
-      { opened: true, openedAt: new Date() }
+      { opened: true, openedAt: new Date() },
+      { new: true }
     );
+    if (updated && updated.campaignId) {
+      await Campaign.findByIdAndUpdate(updated.campaignId, { $inc: { totalOpened: 1 } }).catch(() => {});
+    }
   } catch (e) { /* ignore */ }
+});
+
+app.get("/api/campaigns", async (req, res) => {
+  try {
+    const campaigns = await Campaign.find().sort({ createdAt: -1 }).lean();
+    res.json(campaigns);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/campaigns", async (req, res) => {
+  try {
+    const { name, smtpHost, smtpUser, smtpFrom } = req.body;
+    const campaign = await Campaign.create({ name: name || "Campaign " + Date.now(), smtpHost, smtpUser, smtpFrom });
+    res.json(campaign);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get("/api/reports", async (req, res) => {
   try {
+    const { campaignId } = req.query;
+    const filter = {};
+    if (campaignId) filter.campaignId = campaignId;
     const today = new Date().toISOString().slice(0, 10);
-    const sends = await Send.find().sort({ sentAt: -1 }).limit(200);
+    const sends = await Send.find(filter).sort({ sentAt: -1 }).limit(200);
     const todaySends = sends.filter(s => s.batchDate === today);
     const stats = {
       todaySent: todaySends.filter(s => s.status === "sent").length,
       todayFailed: todaySends.filter(s => s.status === "failed").length,
       todayOpened: todaySends.filter(s => s.opened).length,
-      totalSent: await Send.countDocuments({ status: "sent" }),
-      totalOpened: await Send.countDocuments({ opened: true }),
-      totalFailed: await Send.countDocuments({ status: "failed" }),
+      totalSent: await Send.countDocuments({ ...filter, status: "sent" }),
+      totalOpened: await Send.countDocuments({ ...filter, opened: true }),
+      totalFailed: await Send.countDocuments({ ...filter, status: "failed" }),
     };
     res.json({ sends, stats });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/export", async (req, res) => {
+  try {
+    const filter = { opened: true };
+    let label = "all_campaigns";
+    if (req.query.campaignId) {
+      filter.campaignId = req.query.campaignId;
+      const campaign = await Campaign.findById(req.query.campaignId).lean();
+      label = campaign ? campaign.name.replace(/[^a-zA-Z0-9]/g,"_") : "campaign";
+    }
+    const sends = await Send.find(filter).sort({ openedAt: -1 }).lean();
+    let csv = "Email,Subject,Campaign,Sent At,Opened At\n";
+    sends.forEach(s => {
+      csv += `"${s.email}","${s.subject || ""}","${s.campaignId || ""}","${s.sentAt?.toISOString() || ""}","${s.openedAt?.toISOString() || ""}"\n`;
+    });
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="opens_${label}.csv"`);
+    res.send(csv);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

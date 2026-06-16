@@ -182,6 +182,10 @@ tr:hover td { background: #f8faff; }
       <button class="btn btn-purple" onclick="fillToWithFiltered()">Use Filtered Emails</button>
       <input class="input" id="composeTo" placeholder="To (comma separated)" style="flex:1;min-width:200px">
     </div>
+    <div class="flex" style="margin-top:8px;font-size:12px;color:#888">
+      <span>Campaign: <span id="currentCampaignName" style="color:#333;font-weight:600">Default</span></span>
+      <button class="btn btn-sm btn-green" onclick="newCampaign()" style="margin-left:auto">New Campaign</button>
+    </div>
     <div class="flex" style="margin-top:12px">
       <button class="btn btn-green" onclick="sendEmail()">Send Email</button>
       <button class="btn btn-blue" onclick="showSmtpSettings()">SMTP Settings</button>
@@ -208,11 +212,13 @@ tr:hover td { background: #f8faff; }
 <div id="tab-reports" class="tab-content">
   <div class="card">
     <h2>Send History &amp; Reports</h2>
-    <div class="stats" id="reportStats"></div>
-    <div style="margin-bottom:12px">
-      <button class="btn btn-sm btn-red" onclick="clearReports()">Clear History</button>
+    <div class="flex" style="margin-bottom:12px">
+      <select id="campaignSelect" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px" onchange="onCampaignChange()"></select>
+      <button class="btn btn-sm btn-green" onclick="newCampaign()">+ New Campaign</button>
+      <button class="btn btn-sm btn-orange" onclick="exportCampaignOpens()">Export Opens CSV</button>
       <button class="btn btn-sm btn-blue" onclick="fetchReports()">Refresh</button>
     </div>
+    <div class="stats" id="reportStats"></div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Time</th><th>To</th><th>Subject</th><th>Status</th><th>Opened</th><th>Error</th></tr></thead>
@@ -228,14 +234,14 @@ tr:hover td { background: #f8faff; }
   <div style="background:#fff;border-radius:12px;padding:24px;width:90%;max-width:450px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
     <h2 style="font-size:18px;margin-bottom:16px">SMTP Settings</h2>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <input class="input" id="smtpHost" placeholder="Host" value="smtp.gmail.com">
-      <div class="grid-2">
-        <input class="input" id="smtpPort" placeholder="Port" value="465">
-        <input class="input" id="smtpSecure" placeholder="Secure (SSL/TLS)" value="true">
-      </div>
-      <input class="input" id="smtpUser" placeholder="Username">
-      <input class="input" id="smtpPass" type="password" placeholder="Password / App Password">
-      <input class="input" id="smtpFrom" placeholder="From Email">
+<input class="input" id="smtpHost" placeholder="Host" value="smtp.gmail.com">
+<div class="grid-2">
+  <input class="input" id="smtpPort" placeholder="Port" value="465">
+  <input class="input" id="smtpSecure" placeholder="Secure (SSL/TLS)" value="true">
+</div>
+<input class="input" id="smtpUser" placeholder="Username" onchange="saveSmtp()">
+<input class="input" id="smtpPass" type="password" placeholder="Password / App Password" onchange="saveSmtp()">
+<input class="input" id="smtpFrom" placeholder="From Email" onchange="saveSmtp()">
     </div>
     <div class="flex" style="margin-top:16px">
       <button class="btn btn-green" onclick="closeSmtp()">Done</button>
@@ -250,17 +256,81 @@ let rawData = [];
 let sortCol = null;
 let sortDir = 1;
 let activeFilters = new Set();
+let currentCampaignId = null;
+
+async function initCampaign() {
+  try {
+    const r = await fetch("http://localhost:3000/api/campaigns");
+    const campaigns = await r.json();
+    const sel = document.getElementById("campaignSelect");
+    sel.innerHTML = '<option value="">All Campaigns</option>' +
+      campaigns.map(c => `<option value="${c._id}">${c.name} (${c.totalSent} sent, ${c.totalOpened} opened)</option>`).join("");
+    sel.value = currentCampaignId || "";
+    const selected = sel.selectedOptions[0];
+    document.getElementById("currentCampaignName").textContent = selected ? selected.text.split(" (")[0] : "All";
+  } catch (e) { /* server off */ }
+}
+initCampaign();
+
+async function newCampaign() {
+  const name = prompt("Campaign name:", "Campaign " + new Date().toLocaleString());
+  if (!name) return;
+  try {
+    const smtpHost = document.getElementById("smtpHost").value.trim() || "smtp.gmail.com";
+    const smtpUser = document.getElementById("smtpUser").value.trim() || "";
+    const smtpFrom = document.getElementById("smtpFrom").value.trim() || "";
+    const r = await fetch("http://localhost:3000/api/campaigns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, smtpHost, smtpUser, smtpFrom }),
+    });
+    const c = await r.json();
+    currentCampaignId = c._id;
+    document.getElementById("currentCampaignName").textContent = c.name;
+    const sel = document.getElementById("campaignSelect");
+    const opt = document.createElement("option");
+    opt.value = c._id;
+    opt.text = c.name + " (0 sent, 0 opened)";
+    sel.insertBefore(opt, sel.options[1] || null);
+    sel.value = c._id;
+  } catch (e) { alert("Failed to create campaign"); }
+}
+
+function onCampaignChange() {
+  const sel = document.getElementById("campaignSelect");
+  currentCampaignId = sel.value || null;
+  const name = sel.selectedOptions[0]?.text.split(" (")[0] || "All";
+  document.getElementById("currentCampaignName").textContent = name;
+  fetchReports();
+}
+
+async function exportCampaignOpens() {
+  try {
+    const url = "http://localhost:3000/api/export" + (currentCampaignId ? `?campaignId=${currentCampaignId}` : "");
+    const r = await fetch(url);
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "opens.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { alert("Export failed"); }
+}
 
 function switchTab(name) {
   document.querySelectorAll(".tab, .tab-content").forEach(el => el.classList.remove("active"));
   document.querySelector(`.tab[onclick*='${name}']`).classList.add("active");
   document.getElementById("tab-" + name).classList.add("active");
   if (name === "compose") {
-updateLimitDisplay();
+    updateLimitDisplay();
+    if (rawData.some(r => (r.NAME || "").includes("@"))) autoFillTo();
+  }
+  if (name === "reports") { renderReports(); initCampaign(); }
+}
 
 // Keep Render server awake (ping every 9 min)
 function keepAlive() {
-  fetch("https://email-filter-sdq0.onrender.com/api/reports")
+  fetch("http://localhost:3000/api/reports")
     .then(r => r.json())
     .then(d => {
       const el = document.getElementById("serverStatus") || document.querySelector(".tabs");
@@ -279,10 +349,6 @@ function keepAlive() {
 }
 keepAlive();
 setInterval(keepAlive, 540000); // 9 min
-    if (rawData.some(r => (r.NAME || "").includes("@"))) autoFillTo();
-  }
-  if (name === "reports") renderReports();
-}
 
 // ====== AUTO-DETECT ======
 function autoDetect(text) {
@@ -455,7 +521,9 @@ function getTodaySent() { return parseInt(localStorage.getItem("email_sent_" + g
 function addTodaySent(n) {
   const key = "email_sent_" + getToday();
   localStorage.setItem(key, getTodaySent() + n);
-  updateLimitDisplay();
+updateLimitDisplay();
+loadSmtp();
+
 }
 function updateLimitDisplay() {
   const sent = getTodaySent(), limit = getLimit();
@@ -474,12 +542,15 @@ function logSend(to, status, count) {
 function renderReports() {
   const log = JSON.parse(localStorage.getItem("email_send_log") || "[]");
   const body = document.getElementById("reportBody");
-  if (!log.length) { body.innerHTML = "<tr><td colspan='6' style='text-align:center;padding:20px;color:#888'>No history yet</td></tr>"; return; }
-  body.innerHTML = log.map(r => `<tr><td>${r.time}</td><td title="${r.to}">${r.to.slice(0,30)}${r.to.length>30?"...":""}</td>
-    <td>-</td>
-    <td style="color:${r.status==='sent'?'#22c55e':r.status==='failed'?'#ef4444':'#f59e0b'}">${r.status}</td>
-    <td>-</td><td>-</td></tr>`).join("");
-  document.getElementById("reportFooter").textContent = log.length + " entries (local)";
+  if (!log.length) {
+    body.innerHTML = "<tr><td colspan='6' style='text-align:center;padding:20px;color:#888'>Loading server data...</td></tr>";
+  } else {
+    body.innerHTML = log.map(r => `<tr><td>${r.time}</td><td title="${r.to}">${r.to.slice(0,30)}${r.to.length>30?"...":""}</td>
+      <td>-</td>
+      <td style="color:${r.status==='sent'?'#22c55e':r.status==='failed'?'#ef4444':'#f59e0b'}">${r.status}</td>
+      <td>-</td><td>-</td></tr>`).join("");
+    document.getElementById("reportFooter").textContent = log.length + " entries (local)";
+  }
   const today = getToday();
   const todayLog = log.filter(r => r.date === today);
   document.getElementById("reportStats").innerHTML =
@@ -494,7 +565,8 @@ function clearReports() {
 }
 async function fetchReports() {
   try {
-    const r = await fetch("https://email-filter-sdq0.onrender.com/api/reports");
+    const url = "http://localhost:3000/api/reports" + (currentCampaignId ? `?campaignId=${currentCampaignId}` : "");
+    const r = await fetch(url);
     const data = await r.json();
     if (!data.stats) return;
     const html = document.getElementById("reportStats").innerHTML;
@@ -502,6 +574,19 @@ async function fetchReports() {
       `<div class="stat"><div class="lbl">Server Sent</div><div class="val" style="color:#22c55e">${data.stats.totalSent}</div></div>` +
       `<div class="stat"><div class="lbl">Opened</div><div class="val" style="color:#22c55e">${data.stats.totalOpened}</div></div>` +
       `<div class="stat"><div class="lbl">Failed</div><div class="val" style="color:#ef4444">${data.stats.totalFailed}</div></div>`;
+    // Show server data in table with open info
+    if (data.sends && data.sends.length) {
+      const body = document.getElementById("reportBody");
+      body.innerHTML = data.sends.map(s => `<tr>
+        <td>${new Date(s.sentAt).toLocaleTimeString()}</td>
+        <td title="${s.email}">${s.email.slice(0,30)}${s.email.length>30?"...":""}</td>
+        <td>${(s.subject||"").slice(0,20)}</td>
+        <td style="color:${s.status==='sent'?'#22c55e':'#ef4444'}">${s.status}</td>
+        <td style="color:${s.opened?'#22c55e':'#888'}">${s.opened ? new Date(s.openedAt).toLocaleString() : 'No'}</td>
+        <td style="color:#ef4444;font-size:12px">${s.error||'-'}</td>
+      </tr>`).join("");
+      document.getElementById("reportFooter").textContent = data.sends.length + " entries (server)";
+    }
   } catch (e) { /* server off */ }
 }
 
@@ -536,10 +621,23 @@ function fillToWithFiltered() {
 }
 
 function showSmtpSettings() {
+  loadSmtp();
   document.getElementById("smtpModal").style.display = "flex";
 }
 function closeSmtp() {
+  saveSmtp();
   document.getElementById("smtpModal").style.display = "none";
+}
+function saveSmtp() {
+  ["smtpHost","smtpPort","smtpSecure","smtpUser","smtpPass","smtpFrom"].forEach(id =>
+    localStorage.setItem(id, document.getElementById(id).value)
+  );
+}
+function loadSmtp() {
+  ["smtpHost","smtpPort","smtpSecure","smtpUser","smtpPass","smtpFrom"].forEach(id => {
+    const v = localStorage.getItem(id);
+    if (v) document.getElementById(id).value = v;
+  });
 }
 
 function togglePreview() {
@@ -568,6 +666,8 @@ function sendEmail() {
   const body = document.getElementById("composeBody").value.trim();
   if (!toAll.length || !subject || !body)
     return alert("Fill To, Subject, and Body");
+  if (!host || !user || !pass || !from)
+    return alert("Fill SMTP settings (click SMTP Settings button)");
   
   const limit = getLimit(), todaySent = getTodaySent();
   const available = limit - todaySent;
@@ -580,23 +680,11 @@ function sendEmail() {
   const prog = document.getElementById("sendProgress");
   const status = document.getElementById("sendStatus");
   const total = sendList.length;
-  let sent = 0, failed = 0;
+  let sent = 0, failed = 0, idx = 0;
 
   prog.style.display = "";
   status.textContent = "";
-  document.getElementById("progStatus").textContent = "Waking up server...";
-  document.getElementById("progCount").textContent = "0 / " + total;
 
-  // Wake up Render server first
-  fetch("https://email-filter-sdq0.onrender.com/api/reports")
-    .then(() => startSending())
-    .catch(() => startSending());
-
-  function startSending() {
-    document.getElementById("progStatus").textContent = failed > 0 ? "Sending... (" + failed + " failed)" : "Sending...";
-    updateProg();
-    sendNext();
-  }
   function updateProg() {
     document.getElementById("progStatus").textContent = failed > 0 ? "Sending... (" + failed + " failed)" : "Sending...";
     document.getElementById("progCount").textContent = (sent + failed) + " / " + total;
@@ -607,7 +695,6 @@ function sendEmail() {
   }
   updateProg();
 
-  let idx = 0;
   function sendNext() {
     if (idx >= total) {
       document.getElementById("progStatus").textContent = failed ? "Done with " + failed + " failure(s)" : "All sent!";
@@ -621,11 +708,11 @@ function sendEmail() {
     }
     const to = sendList[idx];
     const trackingId = Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8);
-    fetch("https://email-filter-sdq0.onrender.com/send", {
+    fetch("http://localhost:3000/send", {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ host, port, secure, user, pass, from, to, subject, body, fromName, trackingId }),
+      body: JSON.stringify({ host, port, secure, user, pass, from, to, subject, body, fromName, trackingId, campaignId: currentCampaignId }),
     })
       .then(r => r.json())
       .then(d => {
