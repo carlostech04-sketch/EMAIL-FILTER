@@ -1,9 +1,8 @@
 const dns = require("dns");
-dns.setDefaultResultOrder("ipv4first");
 
 function ipv4Lookup(hostname, opts, cb) {
   dns.resolve4(hostname, (err, addresses) => {
-    if (err || !addresses || !addresses.length) return dns.lookup(hostname, { family: 4 }, cb);
+    if (err || !addresses || !addresses.length) return dns.lookup(hostname, { family: 4, hints: dns.ADDRCONFIG }, cb);
     cb(null, addresses[0], 4);
   });
 }
@@ -93,9 +92,9 @@ app.post("/send", async (req, res) => {
       port: smtp.port,
       secure: smtp.secure,
       auth: { user: smtp.user, pass: smtp.pass },
-      connectionTimeout: 15000,
-      greetingTimeout: 10000,
-      socketTimeout: 20000,
+      connectionTimeout: 8000,
+      greetingTimeout: 6000,
+      socketTimeout: 10000,
       lookup: ipv4Lookup,
     });
 
