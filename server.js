@@ -206,8 +206,8 @@ app.get("/api/export", async (req, res) => {
     }
     const sends = await Send.find(filter).sort({ openedAt: -1 }).lean();
     // Resolve campaign names for all sends
-    const campIds = [...new Set(sends.map(s => String(s.campaignId)).filter(Boolean))];
-    const camps = await Campaign.find({ _id: { $in: campIds } }).lean();
+    const campIds = [...new Set(sends.map(s => s.campaignId).filter(id => id != null))];
+    const camps = campIds.length ? await Campaign.find({ _id: { $in: campIds } }).lean() : [];
     const campMap = {};
     camps.forEach(c => campMap[c._id] = c.name);
 
