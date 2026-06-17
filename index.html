@@ -779,6 +779,8 @@ function exportCSV() {
 
 // ====== CSV PARSER ======
 function parseCSV(text) {
+  // Remove UTF-8 BOM if present
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   const rows = []; let row = []; let field = ""; let inQ = false;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i], nxt = text[i + 1];
