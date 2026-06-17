@@ -826,6 +826,18 @@ function loadFile(file) {
   reader.onload = e => {
     rawData = parseCSV(e.target.result);
     if (!rawData.length) return alert("No data found");
+    // Normalize column names
+    const colMap = { "email":"NAME", "e-mail":"NAME", "mail":"NAME", "name":"NAME", "full name":"NAME",
+      "phone":"RECEIVER", "mobile":"RECEIVER", "contact":"RECEIVER",
+      "status":"STATUS", "type":"STATUS" };
+    rawData = rawData.map(row => {
+      const n = {};
+      Object.keys(row).forEach(k => {
+        const nk = colMap[k.toLowerCase().trim()] || k;
+        n[nk] = row[k];
+      });
+      return n;
+    });
     loadData();
     const hasEmail = rawData.some(r => (r.NAME || "").includes("@"));
     if (hasEmail) { document.getElementById("composeSubject").focus(); }
