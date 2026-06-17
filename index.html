@@ -441,7 +441,7 @@ function loadData() {
   document.getElementById("copyBtn").textContent = isEmail ? "Copy Emails" : "Copy Numbers";
   if (isEmail) autoFillTo();
   // Build status filter buttons
-  const statuses = [...new Set(rawData.map(r => r.STATUS))];
+  const statuses = [...new Set(rawData.map(r => r.STATUS).filter(Boolean))];
   const html = '<button class="filter-btn active" data-filter="all">All</button>' +
     statuses.map(s => `<button class="filter-btn" data-filter="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join("");
   document.getElementById("filterBtns").innerHTML = html;
