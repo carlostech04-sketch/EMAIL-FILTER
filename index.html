@@ -427,7 +427,7 @@ function loadNumData(nums) {
 }
 
 function autoFillTo() {
-  const items = [...new Set(rawData.map(r => r.NAME).filter(v => v && v.includes("@")))];  
+  const items = [...new Set(rawData.flatMap(r => Object.values(r)).filter(v => typeof v === "string" && v.includes("@")))];  
   if (items.length) {
     document.getElementById("composeTo").value = items.join(", ");
     document.getElementById("composeCount").textContent = items.length + " emails loaded from data";
@@ -437,7 +437,7 @@ function autoFillTo() {
 
 function loadData() {
   document.getElementById("dataSection").style.display = "";
-  const isEmail = rawData.some(r => (r.NAME || "").includes("@"));
+  const isEmail = rawData.some(r => Object.values(r).some(v => typeof v === "string" && v.includes("@")));
   document.getElementById("copyBtn").textContent = isEmail ? "Copy Emails" : "Copy Numbers";
   if (isEmail) autoFillTo();
   // Build status filter buttons
@@ -491,7 +491,7 @@ function renderTable() {
       return va.localeCompare(vb) * sortDir;
     });
   }
-  const isEmail = rawData.some(r => (r.NAME || "").includes("@"));
+  const isEmail = rawData.some(r => Object.values(r).some(v => typeof v === "string" && v.includes("@")));
   const cols = isEmail ? ["STATUS","NAME","RECEIVER"] : ["STATUS","NAME","RECEIVER","SENT","DELIVERED","READ","FAILED","ERROR"];
   const labels = isEmail ? ["Type","Email","Email"] : ["Status","Name","Receiver","Sent","Delivered","Read","Failed","Error"];
 
@@ -500,9 +500,12 @@ function renderTable() {
   ).join("")}</tr>`;
 
   document.getElementById("tableBody").innerHTML = filtered.map(r => {
-    const sc = "status-" + r.STATUS;
-    if (isEmail) return `<tr><td><span class="status-badge ${sc}">${r.STATUS}</span></td><td>${r.NAME}</td><td>${r.RECEIVER}</td></tr>`;
-    return `<tr><td><span class="status-badge ${sc}">${r.STATUS}</span></td><td>${r.NAME}</td><td>${r.RECEIVER}</td>
+    const st = r.STATUS || "";
+    const sc = "status-" + st;
+    const nm = r.NAME || "";
+    const rc = r.RECEIVER || "";
+    if (isEmail) return `<tr><td><span class="status-badge ${sc}">${st}</span></td><td>${nm}</td><td>${rc}</td></tr>`;
+    return `<tr><td><span class="status-badge ${sc}">${st}</span></td><td>${nm}</td><td>${rc}</td>
       <td>${r.SENT||"-"}</td><td>${r.DELIVERED||"-"}</td><td>${r.READ||"-"}</td><td>${r.FAILED||"-"}</td><td>${r.ERROR||"-"}</td></tr>`;
   }).join("") || "<tr><td colspan='8' style='text-align:center;padding:20px;color:#888'>No data</td></tr>";
 
@@ -611,7 +614,7 @@ function onBodyChange() {
 
 function fillToWithFiltered() {
   const filtered = getFiltered();
-  const items = [...new Set(filtered.map(r => r.NAME).filter(Boolean))];
+  const items = [...new Set(filtered.flatMap(r => Object.values(r)).filter(v => typeof v === "string" && v.includes("@")))];
   document.getElementById("composeTo").value = items.join(", ");
   const emails = items.filter(v => v.includes("@"));
   if (emails.length) {
@@ -736,21 +739,25 @@ function sendEmail() {
 }
 
 // ====== COPY & EXPORT ======
+function allEmails(rows) {
+  return [...new Set(rows.flatMap(r => Object.values(r)).filter(v => typeof v === "string" && v.includes("@")))]
+}
+
 function copyNums() {
   const filtered = getFiltered();
   if (!filtered.length) return alert("No data");
-  const isEmail = filtered.some(r => r.NAME.includes("@"));
-  const items = [...new Set(filtered.map(r => r.NAME).filter(Boolean))];
+  const items = allEmails(filtered);
   const text = items.join("\r\n");
-  navigator.clipboard.writeText(text).then(() => alert("Copied " + items.length + " " + (isEmail ? "emails" : "numbers")));
+  navigator.clipboard.writeText(text).then(() => alert("Copied " + items.length + " emails"));
 }
 
 function cleanNum(v) { return v ? v.replace(/[^\d]/g, "") : ""; }
 function exportTXT() {
   const filtered = getFiltered();
   if (!filtered.length) return alert("No data");
-  const isEmail = filtered.some(r => r.NAME.includes("@"));
-  const items = [...new Set(filtered.map(r => r.NAME).filter(Boolean))];
+  const isEmail = filtered.some(r => Object.values(r).some(v => typeof v === "string" && v.includes("@")));
+  const items = allEmails(filtered)
+    .concat(isEmail ? [] : [...new Set(filtered.map(r => r.NAME || r.RECEIVER || "").filter(Boolean))]);
   const blob = new Blob([items.join("\r\n")], { type: "text/plain;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -761,12 +768,13 @@ function exportTXT() {
 
 function exportCSV() {
   const filtered = getFiltered();
-  const isEmail = filtered.some(r => r.NAME.includes("@"));
+  const isEmail = filtered.some(r => Object.values(r).some(v => typeof v === "string" && v.includes("@")));
   const cols = isEmail ? ["EMAIL"] : ["NAME","RECEIVER","STATUS"];
   if (!filtered.length) return alert("No data");
   let csv = cols.map(c => `"${c}"`).join(",") + "\r\n";
   filtered.forEach(r => {
-    if (isEmail) csv += `"${r.NAME}"\r\n`;
+    const email = Object.values(r).find(v => typeof v === "string" && v.includes("@"));
+    if (isEmail) csv += `"${email || r.NAME || ""}"\r\n`;
     else csv += cols.map(c => `"${(r[c]||"").replace(/"/g,'""')}"`).join(",") + "\r\n";
   });
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;bom" });
