@@ -186,9 +186,12 @@ tr:hover td { background: #f8faff; }
       <span>Campaign: <span id="currentCampaignName" style="color:#333;font-weight:600">Default</span></span>
       <button class="btn btn-sm btn-green" onclick="newCampaign()" style="margin-left:auto">New Campaign</button>
     </div>
-    <div class="flex" style="margin-top:12px">
+    <div class="flex" style="margin-top:12px;align-items:center">
       <button class="btn btn-green" onclick="sendEmail()">Send Email</button>
-      <button class="btn btn-blue" onclick="showSmtpSettings()">SMTP Settings</button>
+      <label style="font-size:13px;margin-left:12px;display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="skipRecent" checked> Skip recent (6h)
+      </label>
+      <button class="btn btn-blue" onclick="showSmtpSettings()" style="margin-left:auto">SMTP Settings</button>
     </div>
     <div id="sendProgress" style="display:none;margin-top:12px">
       <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
@@ -656,7 +659,7 @@ function togglePreview() {
   document.getElementById("htmlPreview").srcdoc = val || "<html><body style='font-family:Arial;padding:20px;color:#333'>Empty body</body></html>";
 }
 
-function sendEmail() {
+async function sendEmail() {
   const host = document.getElementById("smtpHost").value.trim();
   const port = document.getElementById("smtpPort").value.trim();
   const secure = document.getElementById("smtpSecure").value.trim();
@@ -664,14 +667,29 @@ function sendEmail() {
   const pass = document.getElementById("smtpPass").value.trim();
   const from = document.getElementById("smtpFrom").value.trim();
   const fromName = document.getElementById("smtpFromName").value.trim();
-  const toAll = document.getElementById("composeTo").value.split(",").map(s => s.trim()).filter(Boolean);
+  let toAll = document.getElementById("composeTo").value.split(",").map(s => s.trim()).filter(Boolean);
   const subject = document.getElementById("composeSubject").value.trim();
   const body = document.getElementById("composeBody").value.trim();
   if (!toAll.length || !subject || !body)
     return alert("Fill To, Subject, and Body");
   if (!host || !user || !pass || !from)
     return alert("Fill SMTP settings (click SMTP Settings button)");
-  
+
+  if (document.getElementById("skipRecent").checked) {
+    try {
+      const r = await fetch((location.port === "3000" ? "" : "https://email-filter-sdq0.onrender.com") + "/api/recent-sends?hours=6");
+      const d = await r.json();
+      const recent = new Set(d.emails.map(e => e.toLowerCase()));
+      const before = toAll.length;
+      toAll = toAll.filter(e => !recent.has(e.toLowerCase()));
+      const skipped = before - toAll.length;
+      if (skipped > 0) alert(skipped + " recipient(s) skipped (sent in last 6h)");
+      if (!toAll.length) return alert("All recipients skipped — already sent in last 6h");
+    } catch (e) {
+      alert("Could not check recent sends, proceeding anyway: " + e.message);
+    }
+  }
+
   const limit = getLimit(), todaySent = getTodaySent();
   const available = limit - todaySent;
   if (available <= 0) return alert("Daily limit of " + limit + " reached! Wait for reset.");

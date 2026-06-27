@@ -193,6 +193,17 @@ app.get("/api/reports", async (req, res) => {
   }
 });
 
+app.get("/api/recent-sends", async (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours) || 6;
+    const since = new Date(Date.now() - hours * 3600000);
+    const emails = await Send.distinct("email", { sentAt: { $gte: since } });
+    res.json({ emails, count: emails.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/api/export", async (req, res) => {
   try {
     const filter = { opened: true };
