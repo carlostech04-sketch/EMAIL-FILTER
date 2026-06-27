@@ -63,14 +63,14 @@ function parseBool(value) {
 }
 
 function getSmtpConfig(body) {
-  const port = parseInt(process.env.SMTP_PORT || body.port || "465", 10);
-  const secure = parseBool(process.env.SMTP_SECURE ?? body.secure) ?? port === 465;
-  const user = process.env.SMTP_USER || body.user;
-  const pass = process.env.SMTP_PASS || body.pass;
-  const from = process.env.SMTP_FROM || body.from || user;
+  const port = parseInt(body.port || process.env.SMTP_PORT || "465", 10);
+  const secure = parseBool(body.secure ?? process.env.SMTP_SECURE) ?? port === 465;
+  const user = body.user || process.env.SMTP_USER;
+  const pass = body.pass || process.env.SMTP_PASS;
+  const from = body.from || process.env.SMTP_FROM || user;
 
   return {
-    host: process.env.SMTP_HOST || body.host || "smtp.gmail.com",
+    host: body.host || process.env.SMTP_HOST || "smtp.gmail.com",
     port,
     secure,
     user,
