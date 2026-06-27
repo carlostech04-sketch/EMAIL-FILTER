@@ -180,7 +180,7 @@ tr:hover td { background: #f8faff; }
     </div>
     <div class="flex" style="margin-top:12px">
       <button class="btn btn-purple" onclick="fillToWithFiltered()">Use Filtered Emails</button>
-      <input class="input" id="composeTo" placeholder="To (comma separated)" style="flex:1;min-width:200px">
+      <input class="input" id="composeTo" placeholder="To (comma separated)" style="flex:1;min-width:200px" oninput="updateSkipInfo()">
     </div>
     <div class="flex" style="margin-top:8px;font-size:12px;color:#888">
       <span>Campaign: <span id="currentCampaignName" style="color:#333;font-weight:600">Default</span></span>
@@ -189,8 +189,9 @@ tr:hover td { background: #f8faff; }
     <div class="flex" style="margin-top:12px;align-items:center">
       <button class="btn btn-green" onclick="sendEmail()">Send Email</button>
       <label style="font-size:13px;margin-left:12px;display:flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="checkbox" id="skipRecent" checked> Skip recent (6h)
+        <input type="checkbox" id="skipRecent" checked onchange="updateSkipInfo()"> Skip recent (6h)
       </label>
+      <span id="skipInfo" style="font-size:12px;color:#888;margin-left:10px"></span>
       <button class="btn btn-blue" onclick="showSmtpSettings()" style="margin-left:auto">SMTP Settings</button>
     </div>
     <div id="sendProgress" style="display:none;margin-top:12px">
@@ -657,6 +658,22 @@ function togglePreview() {
   wrap.style.display = "block";
   document.getElementById("previewLabel").textContent = "Preview";
   document.getElementById("htmlPreview").srcdoc = val || "<html><body style='font-family:Arial;padding:20px;color:#333'>Empty body</body></html>";
+}
+
+async function updateSkipInfo() {
+  const el = document.getElementById("skipInfo");
+  if (!document.getElementById("skipRecent").checked) { el.textContent = ""; return; }
+  const toAll = document.getElementById("composeTo").value.split(",").map(s => s.trim()).filter(Boolean);
+  if (!toAll.length) { el.textContent = ""; return; }
+  try {
+    const base = location.port === "3000" ? "" : "https://email-filter-sdq0.onrender.com";
+    const r = await fetch(base + "/api/recent-sends?hours=6");
+    const d = await r.json();
+    const recent = new Set(d.emails.map(e => e.toLowerCase()));
+    const skipped = toAll.filter(e => recent.has(e.toLowerCase())).length;
+    const willSend = toAll.length - skipped;
+    el.textContent = skipped ? skipped + " skipped, " + willSend + " will send" : "0 skipped — " + willSend + " will send";
+  } catch (e) { el.textContent = ""; }
 }
 
 async function sendEmail() {
