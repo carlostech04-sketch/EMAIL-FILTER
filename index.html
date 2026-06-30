@@ -245,7 +245,7 @@ tr:hover td { background: #f8faff; }
 </div>
 <input class="input" id="smtpUser" placeholder="Username" onchange="saveSmtp()">
 <input class="input" id="smtpPass" type="password" placeholder="Password / App Password" onchange="saveSmtp()">
-<input class="input" id="smtpFrom" placeholder="From Email" onchange="saveSmtp()">
+<input class="input" id="smtpFrom" placeholder="From Email (leave empty = use Username)" onchange="saveSmtp()">
     </div>
     <div class="flex" style="margin-top:16px">
       <button class="btn btn-green" onclick="closeSmtp()">Done</button>
@@ -264,7 +264,7 @@ let currentCampaignId = null;
 
 async function initCampaign() {
   try {
-    const r = await fetch("http://localhost:3000/api/campaigns");
+    const r = await fetch("http://localhost:3069/api/campaigns");
     const campaigns = await r.json();
     const sel = document.getElementById("campaignSelect");
     sel.innerHTML = '<option value="">All Campaigns</option>' +
@@ -282,8 +282,8 @@ async function newCampaign() {
   try {
     const smtpHost = document.getElementById("smtpHost").value.trim() || "smtp.gmail.com";
     const smtpUser = document.getElementById("smtpUser").value.trim() || "";
-    const smtpFrom = document.getElementById("smtpFrom").value.trim() || "";
-    const r = await fetch("http://localhost:3000/api/campaigns", {
+    const smtpFrom = document.getElementById("smtpFrom").value.trim() || smtpUser;
+    const r = await fetch("http://localhost:3069/api/campaigns", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, smtpHost, smtpUser, smtpFrom }),
@@ -310,7 +310,7 @@ function onCampaignChange() {
 
 async function exportCampaignOpens() {
   try {
-    const url = "http://localhost:3000/api/export" + (currentCampaignId ? `?campaignId=${currentCampaignId}` : "");
+    const url = "http://localhost:3069/api/export" + (currentCampaignId ? `?campaignId=${currentCampaignId}` : "");
     const r = await fetch(url);
     const blob = await r.blob();
     const a = document.createElement("a");
@@ -334,7 +334,7 @@ function switchTab(name) {
 
 // Keep Render server awake (ping every 9 min)
 function keepAlive() {
-  fetch("http://localhost:3000/api/reports")
+  fetch("http://localhost:3069/api/reports")
     .then(r => r.json())
     .then(d => {
       const el = document.getElementById("serverStatus") || document.querySelector(".tabs");
@@ -572,7 +572,7 @@ function clearReports() {
 }
 async function fetchReports() {
   try {
-    const url = "http://localhost:3000/api/reports" + (currentCampaignId ? `?campaignId=${currentCampaignId}` : "");
+    const url = "http://localhost:3069/api/reports" + (currentCampaignId ? `?campaignId=${currentCampaignId}` : "");
     const r = await fetch(url);
     const data = await r.json();
     if (!data.stats) return;
@@ -639,6 +639,12 @@ function saveSmtp() {
   ["smtpHost","smtpPort","smtpSecure","smtpUser","smtpPass","smtpFrom"].forEach(id =>
     localStorage.setItem(id, document.getElementById(id).value)
   );
+  const from = document.getElementById("smtpFrom");
+  const user = document.getElementById("smtpUser").value.trim();
+  if (!from.value.trim() && user) {
+    from.value = user;
+    localStorage.setItem("smtpFrom", user);
+  }
 }
 function loadSmtp() {
   ["smtpHost","smtpPort","smtpSecure","smtpUser","smtpPass","smtpFrom"].forEach(id => {
@@ -666,7 +672,7 @@ async function updateSkipInfo() {
   const toAll = document.getElementById("composeTo").value.split(",").map(s => s.trim()).filter(Boolean);
   if (!toAll.length) { el.textContent = ""; return; }
   try {
-    const base = location.port === "3000" ? "" : "https://email-filter-sdq0.onrender.com";
+    const base = location.port === "3069" ? "" : "https://email-filter-sdq0.onrender.com";
     const r = await fetch(base + "/api/recent-sends?hours=6");
     const d = await r.json();
     const recent = new Set(d.emails.map(e => e.toLowerCase()));
@@ -682,7 +688,7 @@ async function sendEmail() {
   const secure = document.getElementById("smtpSecure").value.trim();
   const user = document.getElementById("smtpUser").value.trim();
   const pass = document.getElementById("smtpPass").value.trim();
-  const from = document.getElementById("smtpFrom").value.trim();
+  const from = document.getElementById("smtpFrom").value.trim() || document.getElementById("smtpUser").value.trim();
   const fromName = document.getElementById("smtpFromName").value.trim();
   let toAll = document.getElementById("composeTo").value.split(",").map(s => s.trim()).filter(Boolean);
   const subject = document.getElementById("composeSubject").value.trim();
@@ -694,7 +700,7 @@ async function sendEmail() {
 
   if (document.getElementById("skipRecent").checked) {
     try {
-      const r = await fetch((location.port === "3000" ? "" : "https://email-filter-sdq0.onrender.com") + "/api/recent-sends?hours=6");
+      const r = await fetch((location.port === "3069" ? "" : "https://email-filter-sdq0.onrender.com") + "/api/recent-sends?hours=6");
       const d = await r.json();
       const recent = new Set(d.emails.map(e => e.toLowerCase()));
       const before = toAll.length;
@@ -746,7 +752,7 @@ async function sendEmail() {
     }
     const to = sendList[idx];
     const trackingId = Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8);
-    fetch("http://localhost:3000/send", {
+    fetch("http://localhost:3069/send", {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
